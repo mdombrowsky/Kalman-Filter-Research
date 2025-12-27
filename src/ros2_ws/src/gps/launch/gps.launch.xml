@@ -1,0 +1,13 @@
+<launch>
+  <!-- GPS Node -->
+  <node
+    pkg="gps"
+    exec="gps_node"
+    name="gps_node"
+    output="screen">
+    <!-- GPS parameters -->
+    <param name="port" value="/dev/ttyAMA5"/>
+    <param name="baudrate" value="38400"/>
+    <param name="frame_id" value="gps"/>
+  </node>
+</launch>  
