@@ -1,0 +1,40 @@
+# -------- Builder --------
+FROM ros:humble AS builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-colcon-common-extensions \
+    python3-rosdep \
+    i2c-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Initialize rosdep (safe to run multiple times)
+RUN rosdep init || true && rosdep update
+
+WORKDIR /ros2_ws
+COPY ros2_ws/src ./src
+
+# Install package dependencies
+RUN rosdep install --from-paths src --ignore-src -y
+
+# Build only DAQ packages
+RUN . /opt/ros/humble/setup.sh && \
+    colcon build \
+      --merge-install \
+      --packages-select imu gps \
+      --cmake-args -DBUILD_TESTING=OFF
+
+# -------- Runtime --------
+FROM ros:humble-ros-core
+
+RUN apt-get update && apt-get install -y \
+    i2c-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /ros2_ws
+COPY --from=builder /ros2_ws/install ./install
+COPY ros2_ws/src/start_sensors.sh /start_sensors.sh
+
+RUN chmod +x /start_sensors.sh
+
+ENTRYPOINT ["/start_sensors.sh"]

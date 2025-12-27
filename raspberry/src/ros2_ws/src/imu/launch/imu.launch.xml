@@ -1,0 +1,15 @@
+<launch>
+    <!-- IMU Node -->
+  <node
+    pkg="imu"
+    exec="imu_node"
+    name="imu_node"
+    output="screen">
+    <!-- IMU parameters -->
+    <!--
+    <param name="frame_id" value="imu_link"/>
+    -->
+    <!-- Load parameters from YAML -->
+    <param from="$(find-pkg-share imu)/config/imu_params.yaml"/>
+  </node>
+</launch>  
