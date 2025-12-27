@@ -6,63 +6,97 @@
 #include <string>
 #include <vector>
 
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
+#include <optional>
+
 class GpsNode : public rclcpp::Node
 {
 public:
-    GpsNode() : Node("gps_node")
-    {
-        fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
-        raw_pub_ = this->create_publisher<std_msgs::msg::String>("gps/raw", 10);
+	GpsNode() : Node("gps_node")
+	{
+		fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gps/fix", 10);
+		raw_pub_ = this->create_publisher<std_msgs::msg::String>("gps/raw", 10);
 
-        // Open serial port (simple version)
-        serial_.open("/dev/ttyAMA5");
-        if (!serial_.is_open()) {
-            RCLCPP_ERROR(this->get_logger(), "Failed to open /dev/ttyAMA5");
-            return;
-        }
+		// Open serial port
+		fd_ = open("/dev/ttyAMA5", O_RDONLY | O_NOCTTY);
+		if (fd_ < 0)
+		{
+			RCLCPP_ERROR(this->get_logger(), "Failed to open /dev/ttyAMA5");
+			return;
+		}
 
-        // Timer to read periodically
-        timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(200),
-            std::bind(&GpsNode::readSerial, this));
-    }
+		// Configure baud rate
+		struct termios tty;
+		tcgetattr(fd_, &tty);
+		cfsetispeed(&tty, B38400);
+		cfsetospeed(&tty, B38400);
+		tty.c_cflag |= (CLOCAL | CREAD);
+		tty.c_cflag &= ~CSIZE;
+		tty.c_cflag |= CS8;
+		tty.c_cflag &= ~PARENB;
+		tty.c_cflag &= ~CSTOPB;
+		tty.c_cflag &= ~CRTSCTS;
+		tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+		tty.c_iflag &= ~(IXON | IXOFF | IXANY);
+		tty.c_oflag &= ~OPOST;
+		tcsetattr(fd_, TCSANOW, &tty);
+
+		// Timer to read periodically
+		timer_ = this->create_wall_timer(
+			std::chrono::milliseconds(200),
+			std::bind(&GpsNode::readSerial, this));
+	}
+
+	~GpsNode()
+	{
+		if (fd_ >= 0) close(fd_);
+	}
 
 private:
-    void readSerial()
-    {
-        std::string line;
-        if (!std::getline(serial_, line))
-            return;
+	void readSerial()
+	{
+		if (fd_ < 0) return;
 
-        // Publish raw NMEA
-        std_msgs::msg::String raw_msg;
-        raw_msg.data = line;
-        raw_pub_->publish(raw_msg);
+		char buf[256];
+		int n = read(fd_, buf, sizeof(buf) - 1);
+		if (n <= 0) return;
+		buf[n] = '\0';
 
-        // If it's a GGA sentence, parse it
-        if (line.rfind("$GNGGA", 0) == 0) {
-            auto fix_msg = parseGGA(line);
-            if (fix_msg) {
-                fix_pub_->publish(*fix_msg);
-            }
-        }
-    }
+		std::stringstream ss(buf);
+		std::string line;
+		while (std::getline(ss, line))
+		{
+			if (line.empty()) continue;
 
-    std::optional<sensor_msgs::msg::NavSatFix> parseGGA(const std::string &nmea)
-    {
-        std::stringstream ss(nmea);
-        std::string token;
-        std::vector<std::string> fields;
-        while (std::getline(ss, token, ',')) {
-            fields.push_back(token);
-        }
+			// Publish raw NMEA
+			std_msgs::msg::String raw_msg;
+			raw_msg.data = line;
+			raw_pub_->publish(raw_msg);
 
-        if (fields.size() < 10) return std::nullopt;
+			// Parse GGA
+			if (line.rfind("$GNGGA", 0) == 0)
+			{
+				auto fix_msg = parseGGA(line);
+				if (fix_msg) fix_pub_->publish(*fix_msg);
+			}
+		}
+	}
 
-        try {
-            sensor_msgs::msg::NavSatFix msg;
-            msg.header.stamp = this->now();
-            msg.header.frame_id = "gps";
+	std::optional<sensor_msgs::msg::NavSatFix> parseGGA(const std::string &nmea)
+	{
+		std::stringstream ss(nmea);
+		std::string token;
+		std::vector<std::string> fields;
+		while (std::getline(ss, token, ',')) fields.push_back(token);
+		if (fields.size() < 10) return std::nullopt;
+
+		try
+		{
+			sensor_msgs::msg::NavSatFix msg;
+			msg.header.stamp = now();
+			msg.header.frame_id = "gps";
 
             // Latitude
             double lat_deg = std::stod(fields[2].substr(0,2));
@@ -76,29 +110,30 @@ private:
             double lon = lon_deg + lon_min/60.0;
             if (fields[5] == "W") lon = -lon;
 
-            msg.latitude = lat;
-            msg.longitude = lon;
-            msg.altitude = std::stod(fields[9]);
+			msg.latitude = lat;
+			msg.longitude = lon;
+			msg.altitude = std::stod(fields[9]);
 
-            msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
-            msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
+			msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+			msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
+			return msg;
+		}
+		catch (...)
+		{
+			return std::nullopt;
+		}
+	}
 
-            return msg;
-        } catch (...) {
-            return std::nullopt;
-        }
-    }
-
-    std::ifstream serial_;
-    rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr raw_pub_;
-    rclcpp::TimerBase::SharedPtr timer_;
+	int fd_{ -1 };
+	rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
+	rclcpp::Publisher<std_msgs::msg::String>::SharedPtr raw_pub_;
+	rclcpp::TimerBase::SharedPtr timer_;
 };
 
 int main(int argc, char **argv)
 {
-    rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<GpsNode>());
-    rclcpp::shutdown();
-    return 0;
+	rclcpp::init(argc, argv);
+	rclcpp::spin(std::make_shared<GpsNode>());
+	rclcpp::shutdown();
+	return 0;
 }
