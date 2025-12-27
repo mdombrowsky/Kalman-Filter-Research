@@ -25,6 +25,10 @@
 #define ACCEL_XOUT_H     0x2D
 #define GYRO_XOUT_H      0x33
 
+// Bank 0 Registers
+#define REG_PWR_MGMT_1    0x06
+#define REG_INT_PIN_CFG   0x0F  // for magnetometer bypass
+
 // Magnetometer (AK09916)
 #define AK09916_I2C_ADDR 0x0C
 #define AK09916_CNTL2   0x31
@@ -91,16 +95,17 @@ bool ICM20948Driver::initialize()
 
     uint8_t whoami = 0;
     if (!read_register(WHO_AM_I_REG, whoami) || whoami != WHO_AM_I_VAL)
-    {
+	{
         return false;
     }
 
-    // Configure accel & gyro
-    select_bank(BANK_2);
+    if (!write_register(REG_PWR_MGMT_1, 0x01)) return false;
 
-    // accel ±2g, gyro ±250 dps
-    write_register(ACCEL_CONFIG, 0x00);
-    write_register(GYRO_CONFIG_1, 0x00);
+    if (!write_register(REG_INT_PIN_CFG, 0x02)) return false;
+
+    select_bank(BANK_2);
+    write_register(ACCEL_CONFIG, 0x01); // Enable Accel + Filter
+    write_register(GYRO_CONFIG_1, 0x01); // Enable Gyro + Filter
 
     select_bank(BANK_0);
 
