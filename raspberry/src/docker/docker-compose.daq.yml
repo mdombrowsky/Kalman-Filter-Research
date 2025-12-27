@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  daq:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.daq
+    container_name: ros2_daq
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+      - "/dev/ttyAMA3:/dev/ttyAMA3"
+      - "/dev/ttyAMA4:/dev/ttyAMA4"
+      - "/dev/ttyAMA5:/dev/ttyAMA5"
+      - "/dev/i2c-1:/dev/i2c-1"
+      - "/dev/i2c-20:/dev/i2c-20"
+      - "/dev/i2c-21:/dev/i2c-21"
+    environment:
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    privileged: true
+    network_mode: host
+    restart: unless-stopped

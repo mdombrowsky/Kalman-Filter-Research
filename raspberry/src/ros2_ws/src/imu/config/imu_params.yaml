@@ -1,0 +1,17 @@
+imu_node:
+  ros__parameters:
+
+    ism330:
+      enabled: true
+      i2c_bus: "/dev/i2c-1"
+      address: 0x6B
+      topic: "/imu1"
+      frame_id: "imu1_link"
+
+    icm20948:
+      enabled: true
+      i2c_bus: "/dev/i2c-1"
+      address: 0x69
+      topic: "/imu2"
+      frame_id: "imu2_link"
+      mag_topic: "/imu2/mag"
