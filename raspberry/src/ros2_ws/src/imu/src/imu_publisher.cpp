@@ -1,5 +1,6 @@
 
 //Adding temperature later
+// run both IMUs at full speed, limit publisher (not sure what rate is optimal - testing!)
 //Add diagnostic_updater (health + rate)
 
 #include <rclcpp/rclcpp.hpp>
@@ -84,23 +85,23 @@ private:
         ism_cfg_.enabled = get_parameter("ism330.enabled").as_bool();
         ism_cfg_.i2c_bus = get_parameter("ism330.i2c_bus").as_string();
         ism_cfg_.address = get_parameter("ism330.address").as_int();
-        //ism_cfg_.frame_id = "ism330_imu_link";
-        //ism_cfg_.topic = "/imu/ism330/data_raw";
 		ism_cfg_.frame_id =
 		  get_parameter("ism330.frame_id").as_string();
 		ism_cfg_.topic =
 		  get_parameter("ism330.topic").as_string();
-		icm_cfg_.mag_topic =
-		  get_parameter("icm20948.mag_topic").as_string();
 
-        if (ism_cfg_.enabled) {
+        if (ism_cfg_.enabled)
+		{
             ism_driver_ = std::make_unique<ISM330DHCXDriver>(
                 ism_cfg_.i2c_bus, static_cast<uint8_t>(ism_cfg_.address));
 
-            if (!ism_driver_->initialize()) {
+            if (!ism_driver_->initialize())
+			{
                 RCLCPP_ERROR(get_logger(), "Failed to initialize ISM330DHCX");
                 ism_driver_.reset();
-            } else {
+            }
+			else
+			{
                 ism_pub_ = create_publisher<sensor_msgs::msg::Imu>(
                     ism_cfg_.topic, 10);
                 RCLCPP_INFO(get_logger(), "ISM330DHCX enabled");
@@ -111,13 +112,13 @@ private:
         icm_cfg_.enabled = get_parameter("icm20948.enabled").as_bool();
         icm_cfg_.i2c_bus = get_parameter("icm20948.i2c_bus").as_string();
         icm_cfg_.address = get_parameter("icm20948.address").as_int();
-        //icm_cfg_.frame_id = "icm20948_imu_link";
-        //icm_cfg_.topic = "/imu/icm20948/data_raw";
+
 		icm_cfg_.frame_id =
 		  get_parameter("icm20948.frame_id").as_string();
 		icm_cfg_.topic =
 		  get_parameter("icm20948.topic").as_string();
-
+		icm_cfg_.mag_topic =
+			get_parameter("icm20948.mag_topic").as_string();
 
         if (icm_cfg_.enabled)
 		{
@@ -128,7 +129,8 @@ private:
 			{
                 RCLCPP_ERROR(get_logger(), "Failed to initialize ICM20948");
                 icm_driver_.reset();
-            } else
+            }
+			else
 			{
                 icm_pub_ = create_publisher<sensor_msgs::msg::Imu>(
                     icm_cfg_.topic, 10);
