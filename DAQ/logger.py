@@ -16,7 +16,7 @@ class SensorNode(Node):
         
         self.callback_group = ReentrantCallbackGroup()
         
-        self.db_conn = sqlite3.connect('sensor_logs.db', check_same_thread=False)
+        self.db_conn = sqlite3.connect('sensor_logs.db', check_same_thread=False, timeout=10)
         self.cursor = self.db_conn.cursor()
         self.setup_database()
 
