@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 import sqlite3
 import threading
+from datetime import datetime
 
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -13,10 +14,14 @@ class SensorNode(Node):
         super().__init__('sensor_node')
         
         self.db_lock = threading.Lock()
-        
         self.callback_group = ReentrantCallbackGroup()
+
+        current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        db_filename = f'sensor_logs_{current_time}.db'
+        self.get_logger().info(f"Logging data to: {db_filename}")
         
-        self.db_conn = sqlite3.connect('sensor_logs.db', check_same_thread=False, timeout=10)
+        #self.db_conn = sqlite3.connect('sensor_logs.db', check_same_thread=False, timeout=10)
+        self.db_conn = sqlite3.connect(db_filename, check_same_thread=False, timeout=10)
         self.cursor = self.db_conn.cursor()
         self.setup_database()
 
